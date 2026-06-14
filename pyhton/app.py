@@ -1,75 +1,59 @@
 #!/usr/bin/env python3
-"""
-Sing-box native script - 使用ctypes调用.so文件
-"""
 
 import os
 import re
 import sys
+import ssl
 import json
 import time
 import base64
 import hashlib
-import subprocess
 import secrets
 import shutil
-import threading
 import signal
 import ctypes
+import requests
+import subprocess
+import threading
+from typing import Optional
 from ctypes import c_int, c_char_p
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional
-
-
-# 尝试导入额外依赖
-try:
-    import requests
-except ImportError:
-    print("Warning: requests not installed, installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
-    import requests
-
 try:
     from cryptography.hazmat.primitives.asymmetric import x25519
     from cryptography.hazmat.primitives import serialization
-    CRYPTO_AVAILABLE = True
 except ImportError:
-    CRYPTO_AVAILABLE = False
-    print("Warning: cryptography not installed, trying to install...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "cryptography"])
-        from cryptography.hazmat.primitives.asymmetric import x25519
-        from cryptography.hazmat.primitives import serialization
-        CRYPTO_AVAILABLE = True
-    except:
-        print("Warning: cryptography library not available, using pure Python implementation")
+    x25519 = None
+    serialization = None
+    HAS_CRYPTOGRAPHY = False
+else:
+    HAS_CRYPTOGRAPHY = True
 
 # ======================== 环境变量定义 ========================
-UPLOAD_URL = os.environ.get('UPLOAD_URL', '')
-PROJECT_URL = os.environ.get('PROJECT_URL', '')
-AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() in ('true', '1', 'yes')
-YT_WARPOUT = os.environ.get('YT_WARPOUT', 'false').lower() in ('true', '1', 'yes')
-FILE_PATH = os.environ.get('FILE_PATH', '.npm')
-SUB_PATH = os.environ.get('SUB_PATH', 'sub')
-UUID = os.environ.get('UUID', '0a6568ff-ea3c-4271-9020-450560e10d63')
-NEZHA_SERVER = os.environ.get('NEZHA_SERVER', '')
-NEZHA_PORT = os.environ.get('NEZHA_PORT', '')
-NEZHA_KEY = os.environ.get('NEZHA_KEY', '')
-ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', '')
-ARGO_AUTH = os.environ.get('ARGO_AUTH', '')
-ARGO_PORT = int(os.environ.get('ARGO_PORT', '8081'))
-S5_PORT = os.environ.get('S5_PORT', '')
-TUIC_PORT = os.environ.get('TUIC_PORT', '')
-HY2_PORT = os.environ.get('HY2_PORT', '')
-ANYTLS_PORT = os.environ.get('ANYTLS_PORT', '')
-REALITY_PORT = os.environ.get('REALITY_PORT', '')
-CFIP = os.environ.get('CFIP', 'saas.sin.fan')
-CFPORT = int(os.environ.get('CFPORT', '443'))
-PORT = int(os.environ.get('PORT', '3000'))
-NAME = os.environ.get('NAME', '')
-CHAT_ID = os.environ.get('CHAT_ID', '')
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
-DISABLE_ARGO = os.environ.get('DISABLE_ARGO', 'false').lower() in ('true', '1', 'yes')
+UPLOAD_URL = os.environ.get('UPLOAD_URL', '')     # 节点或订阅自动上传到订阅器的地址，需填写部署Merge-sub项目的首页，例如 https://merge.xxx.com
+PROJECT_URL = os.environ.get('PROJECT_URL', '')   # 项目地址，例如：https://example.com,开启自动保活时或上传节点订阅需要填写
+AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() in ('true', 'yes') # 是否开启自动保活，true开启，false关闭，默认关闭
+YT_WARPOUT = os.environ.get('YT_WARPOUT', 'false').lower() in ('true', 'yes')   # 是否开启youtube走warp出站，true开启，false关闭，默认关闭
+FILE_PATH = os.environ.get('FILE_PATH', '.cache')  # 运行时文件存储路径，默认当前目录下的.cache文件夹
+SUB_PATH = os.environ.get('SUB_PATH', 'sub')       # 获取订阅节点的token
+UUID = os.environ.get('UUID', '0a6568ff-ea3c-4271-9020-450560e10d63') # 节点和哪吒v1使用的UUID，默认固定值，建议自行生成一个唯一的UUID
+NEZHA_SERVER = os.environ.get('NEZHA_SERVER', '') # 哪吒面板域名,v1格式: nezha.xxx.com:8008  v0格式：nezha.xxx.com
+NEZHA_PORT = os.environ.get('NEZHA_PORT', '')     # 哪吒v0的agnet端口，v1请留空
+NEZHA_KEY = os.environ.get('NEZHA_KEY', '')       # 哪吒v1的NZ_CLIENT_SECRET的值，v0请的agent密钥
+ARGO_PORT = int(os.environ.get('ARGO_PORT', '8001')) # 隧道端口,使用固定隧道token时需要在cloudflare里设置和这里一致
+ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', '')  # 固定隧道域名，留空将使用临时隧道
+ARGO_AUTH = os.environ.get('ARGO_AUTH', '')      # 固定密钥token或json，留空将使用临时隧道
+S5_PORT = os.environ.get('S5_PORT', '')          # SOCKS5 端口，默认不启用
+HY2_PORT = os.environ.get('HY2_PORT', '')        # Hysteria2 端口，默认不启用
+TUIC_PORT = os.environ.get('TUIC_PORT', '')      # TUIC 端口，默认不启用
+ANYTLS_PORT = os.environ.get('ANYTLS_PORT', '')  # AnyTLS 端口，默认不启用
+REALITY_PORT = os.environ.get('REALITY_PORT', '') # Reality 端口，默认不启用
+CFIP = os.environ.get('CFIP', 'saas.sin.fan')    # argo节点的优选域名或优选ip
+CFPORT = int(os.environ.get('CFPORT', '443'))    # argo节点的优选域名或优选ip对应的端口
+PORT = int(os.environ.get('PORT', '3000'))       # HTTP服务器端口，默认3000,用于提供订阅和前端伪装页
+NAME = os.environ.get('NAME', '')               # 节点名称前缀
+CHAT_ID = os.environ.get('CHAT_ID', '')         # Telegram机器人ID，例如1001234567890
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '')     # Telegram机器人Token，例如123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+DISABLE_ARGO = os.environ.get('DISABLE_ARGO', 'false').lower() in ('true', 'yes') # 是否禁用Argo隧道，true禁用，false启用，默认启用
 # ==============================================================
 
 # 全局变量
@@ -334,15 +318,9 @@ class NativeService:
             # 在新线程中调用start函数（模拟异步）
             def run():
                 try:
-                    # 切换工作目录到runtimeFilePath
-                    original_cwd = os.getcwd()
-                    os.chdir(runtimeFilePath)
-                    try:
-                        result = start_func(self.payload.encode('utf-8'))
-                        if result != 0:
-                            print(f"{self.name} native service exited with code {result}")
-                    finally:
-                        os.chdir(original_cwd)
+                    result = start_func(self.payload.encode('utf-8'))
+                    if result != 0:
+                        print(f"{self.name} native service exited with code {result}")
                 except Exception as e:
                     print(f"{self.name} native service failed: {e}")
             
@@ -369,16 +347,31 @@ class NativeService:
 
 # ======================== Reality X25519 密钥对 ========================
 
+def clamp_x25519_private_key(private_key: bytes) -> bytes:
+    if len(private_key) != 32:
+        raise ValueError('X25519 private key must be 32 bytes')
+    key = bytearray(private_key)
+    key[0] &= 248
+    key[31] &= 127
+    key[31] |= 64
+    return bytes(key)
+
+def base64url_no_padding(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode().rstrip('=')
+
+def decode_base64url_no_padding(value: str) -> bytes:
+    value = value.strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]+', value):
+        raise ValueError('invalid base64url value')
+    padding = '=' * ((4 - len(value) % 4) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
 def x25519_pure_python(private_key: bytes, public_key: bytes) -> bytes:
     P = 2**255 - 19
     A24 = 121665
     
     def decode_scalar(k):
-        k_list = list(k)
-        k_list[0] &= 248
-        k_list[31] &= 127
-        k_list[31] |= 64
-        return bytes(k_list)
+        return clamp_x25519_private_key(k)
     
     def decode_int(s):
         return sum(s[i] << (8 * i) for i in range(32))
@@ -402,7 +395,7 @@ def x25519_pure_python(private_key: bytes, public_key: bytes) -> bytes:
     z3 = 1
     swap = 0
     
-    for t in range(255, -1, -1):
+    for t in range(254, -1, -1):
         k_t = (k[t // 8] >> (t % 8)) & 1
         swap ^= k_t
         x2, x3 = cswap(swap, x2, x3)
@@ -431,35 +424,29 @@ def x25519_pure_python(private_key: bytes, public_key: bytes) -> bytes:
     
     return encode_int(result)
 
+def derive_x25519_public_key(private_key_bytes: bytes) -> bytes:
+    private_key_bytes = clamp_x25519_private_key(private_key_bytes)
+    if HAS_CRYPTOGRAPHY:
+        private_key = x25519.X25519PrivateKey.from_private_bytes(private_key_bytes)
+        return private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+    basepoint = bytes([9] + [0] * 31)
+    return x25519_pure_python(private_key_bytes, basepoint)
+
 def generate_reality_keypair():
-    if CRYPTO_AVAILABLE:
-        private_bytes = x25519.X25519PrivateKey.generate()
-        private_key_base64 = base64.urlsafe_b64encode(
-            private_bytes.private_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PrivateFormat.Raw,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-        ).decode().rstrip('=')
-        
-        public_bytes = private_bytes.public_key()
-        public_key_base64 = base64.urlsafe_b64encode(
-            public_bytes.public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw
-            )
-        ).decode().rstrip('=')
-        
-        return {'privateKey': private_key_base64, 'publicKey': public_key_base64}
-    else:
-        private_bytes = secrets.token_bytes(32)
-        basepoint = bytes([9] + [0] * 31)
-        public_bytes = x25519_pure_python(private_bytes, basepoint)
-        
-        private_key_base64 = base64.urlsafe_b64encode(private_bytes).decode().rstrip('=')
-        public_key_base64 = base64.urlsafe_b64encode(public_bytes).decode().rstrip('=')
-        
-        return {'privateKey': private_key_base64, 'publicKey': public_key_base64}
+    private_bytes = clamp_x25519_private_key(secrets.token_bytes(32))
+    public_bytes = derive_x25519_public_key(private_bytes)
+    return {
+        'privateKey': base64url_no_padding(private_bytes),
+        'publicKey': base64url_no_padding(public_bytes)
+    }
+
+def write_keypair(private_key_value: str, public_key_value: str):
+    os.makedirs(os.path.dirname(keypairPath), exist_ok=True)
+    with open(keypairPath, 'w') as f:
+        f.write(f'PrivateKey: {private_key_value}\nPublicKey: {public_key_value}\n')
 
 def generate_or_load_keypair():
     global privateKey, publicKey
@@ -470,17 +457,27 @@ def generate_or_load_keypair():
         private_match = re.search(r'PrivateKey:\s*(.*)', content)
         public_match = re.search(r'PublicKey:\s*(.*)', content)
         if private_match and public_match:
-            privateKey = private_match.group(1)
-            publicKey = public_match.group(1)
-            print(f'Private Key: {privateKey}')
-            print(f'Public Key: {publicKey}')
-            return
+            try:
+                loaded_private = decode_base64url_no_padding(private_match.group(1))
+                loaded_public = decode_base64url_no_padding(public_match.group(1))
+                normalized_private = clamp_x25519_private_key(loaded_private)
+                derived_public = derive_x25519_public_key(normalized_private)
+                if len(loaded_public) != 32 or derived_public != loaded_public:
+                    raise ValueError('stored public key does not match private key')
+                privateKey = base64url_no_padding(normalized_private)
+                publicKey = base64url_no_padding(derived_public)
+                if privateKey != private_match.group(1).strip() or publicKey != public_match.group(1).strip():
+                    write_keypair(privateKey, publicKey)
+                print(f'Private Key: {privateKey}')
+                print(f'Public Key: {publicKey}')
+                return
+            except Exception as e:
+                print(f'Invalid Reality keypair, regenerating: {e}')
     
     pair = generate_reality_keypair()
     privateKey = pair['privateKey']
     publicKey = pair['publicKey']
-    with open(keypairPath, 'w') as f:
-        f.write(f'PrivateKey: {privateKey}\nPublicKey: {publicKey}\n')
+    write_keypair(privateKey, publicKey)
     print(f'Private Key: {privateKey}')
     print(f'Public Key: {publicKey}')
 
@@ -509,29 +506,58 @@ eQ6OFb9LbLYL9f+sAiAffoMbi4y/0YUSlTtz7as9S8/lciBF5VCUoVIKS+vX2g==
 '''
 
 def ensure_tls_certificates(cert_path: str, key_path: str):
-    if os.path.exists(cert_path) and os.path.exists(key_path):
+    if os.path.exists(cert_path) and os.path.exists(key_path) and tls_certificate_pair_is_valid(cert_path, key_path):
         return
     
     os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+    temp_cert_path = f'{cert_path}.tmp'
+    temp_key_path = f'{key_path}.tmp'
+    for temp_path in (temp_cert_path, temp_key_path):
+        try:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+        except:
+            pass
     
     try:
-        subprocess.run(['openssl', 'version'], capture_output=True, check=False)
+        subprocess.run(['openssl', 'version'], capture_output=True, check=True)
         subprocess.run([
-            'openssl', 'ecparam', '-genkey', '-name', 'prime256v1', '-out', key_path
-        ], capture_output=True, check=False)
+            'openssl', 'ecparam', '-genkey', '-name', 'prime256v1', '-out', temp_key_path
+        ], capture_output=True, check=True)
         subprocess.run([
             'openssl', 'req', '-new', '-x509', '-days', '3650',
-            '-key', key_path, '-out', cert_path, '-subj', '/CN=bing.com'
-        ], capture_output=True, check=False)
-        if os.path.exists(cert_path) and os.path.exists(key_path):
+            '-key', temp_key_path, '-out', temp_cert_path, '-subj', '/CN=bing.com'
+        ], capture_output=True, check=True)
+        if tls_certificate_pair_is_valid(temp_cert_path, temp_key_path):
+            os.replace(temp_cert_path, cert_path)
+            os.replace(temp_key_path, key_path)
             return
     except:
         pass
+    
+    for temp_path in (temp_cert_path, temp_key_path):
+        try:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+        except:
+            pass
     
     with open(key_path, 'w') as f:
         f.write(FALLBACK_EC_KEY)
     with open(cert_path, 'w') as f:
         f.write(FALLBACK_CERT)
+    if not tls_certificate_pair_is_valid(cert_path, key_path):
+        raise RuntimeError('failed to create a valid TLS certificate pair')
+
+def tls_certificate_pair_is_valid(cert_path: str, key_path: str) -> bool:
+    if not os.path.exists(cert_path) or not os.path.exists(key_path):
+        return False
+    try:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+        return True
+    except Exception:
+        return False
 
 # ======================== sing-box 配置生成 ========================
 
@@ -979,7 +1005,6 @@ def start_http_server(sub_txt: str, port: int):
 # ======================== 主流程 ========================
 
 def start_server():
-    """主函数 - 完全模拟Node.js的启动方式"""
     global privateKey, publicKey
     
     # 1. 删除旧节点
@@ -1032,7 +1057,7 @@ def start_server():
     with open(singBoxConfigPath, 'w') as f:
         json.dump(sbx_config, f, indent=2)
     
-    # 9. 创建并启动服务（与Node.js完全一致）
+    # 9. 创建并启动服务
     services = []
     
     # sing-box服务
@@ -1106,7 +1131,7 @@ def start_server():
     # 12. 启动 HTTP 服务器
     http_server = start_http_server(sub_txt, PORT)
     
-    # 13. Telegram 推送 + 节点上传 + 自动保活
+    # 13. Telegram 推送 + 节点上传
     send_telegram()
     upload_nodes()
     add_visit_task()
