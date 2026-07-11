@@ -453,7 +453,7 @@ function generateSingBoxConfig(certPath, keyPath) {
       tag: 'tuic-in',
       listen: '::',
       listen_port: parseInt(TUIC_PORT),
-      users: [{ uuid: UUID }],
+      users: [{ uuid: UUID, password: UUID }],
       congestion_control: 'bbr',
       tls: {
         enabled: true,
@@ -724,7 +724,7 @@ async function generateLinks(argoDomain) {
 
   // TUIC
   if (isValidPort(TUIC_PORT)) {
-    subTxt += `\ntuic://${UUID}:@${SERVER_IP}:${TUIC_PORT}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#${nodeName}`;
+    subTxt += `\ntuic://${UUID}:${UUID}@${SERVER_IP}:${TUIC_PORT}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#${nodeName}`;
   }
 
   // Hysteria2

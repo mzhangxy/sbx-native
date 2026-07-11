@@ -618,7 +618,7 @@ def generate_singbox_config(cert_path: str, key_path: str) -> dict:
             'tag': 'tuic-in',
             'listen': '::',
             'listen_port': int(TUIC_PORT),
-            'users': [{'uuid': UUID}],
+            'users': [{'uuid': UUID, 'password': UUID}],
             'congestion_control': 'bbr',
             'tls': {
                 'enabled': True,
@@ -860,7 +860,7 @@ def generate_links(argo_domain: Optional[str]) -> str:
         sub_txt = vmess_node
     
     if is_valid_port(TUIC_PORT):
-        sub_txt += f"\ntuic://{UUID}:@{server_ip}:{TUIC_PORT}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#{node_name}"
+        sub_txt += f"\ntuic://{UUID}:{UUID}@{server_ip}:{TUIC_PORT}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#{node_name}"
     
     if is_valid_port(HY2_PORT):
         sub_txt += f"\nhysteria2://{UUID}@{server_ip}:{HY2_PORT}/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#{node_name}"
