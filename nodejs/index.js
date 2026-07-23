@@ -522,6 +522,34 @@ function generateSingBoxConfig(certPath, keyPath) {
   ];
   const wireguardRuleSets = ['netflix'];
 
+  // YouTube WARP 出站检测 (精简版，直接读取环境变量，避免 execSync 引发 OOM)
+  let needYoutubeWarp = YT_WARPOUT === true || YT_WARPOUT === 'true';
+  
+  if (needYoutubeWarp) {
+    ruleSet.push(remoteRuleSet('youtube', 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/youtube.srs'));
+    wireguardRuleSets.push('youtube');
+    console.log('Add YouTube outbound rule');
+  }
+
+  const route = {
+    default_http_client: 'http-client-direct',
+    rule_set: ruleSet,
+    rules: [{ rule_set: wireguardRuleSets, outbound: 'wireguard-out' }],
+    final: 'direct'
+  };
+
+  return {
+    log: { disabled: true, level: 'error', timestamp: true },
+    http_clients: [{ tag: 'http-client-direct' }],
+    inbounds,
+    endpoints,
+    outbounds: [{ type: 'direct', tag: 'direct' }],
+    route
+  };
+} 
+
+// ======================== nezha 配置生成 ========================
+
 // ======================== nezha 配置生成 ========================
 
 function generateNezhaConfig() {
