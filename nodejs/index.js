@@ -27,16 +27,16 @@ const ARGO_AUTH      = process.env.ARGO_AUTH      || 'eyJhIjoiZDY1NWNiOTk2NzNlZT
 const ARGO_PORT      = Number(process.env.ARGO_PORT) || 59001;    // argo固定隧道端口
 const S5_PORT        = process.env.S5_PORT        || '';         // socks5端口，留空不启用
 const TUIC_PORT      = process.env.TUIC_PORT      || '';         // tuic端口，留空不启用
-const HY2_PORT       = process.env.HY2_PORT       || '6028';         // hy2端口，留空不启用
+const HY2_PORT       = process.env.HY2_PORT       || '';         // hy2端口，留空不启用
 const ANYTLS_PORT    = process.env.ANYTLS_PORT    || '';         // AnyTLS端口，留空不启用
-const REALITY_PORT   = process.env.REALITY_PORT   || '';         // reality端口，留空不启用
+const REALITY_PORT   = process.env.REALITY_PORT   || '6028';         // reality端口，留空不启用
 const CFIP           = process.env.CFIP           || 'saas.sin.fan'; // 优选域名或优选IP
 const CFPORT         = Number(process.env.CFPORT) || 443;        // 优选域名或优选IP对应端口
 const PORT           = Number(process.env.PORT)   || 3000;       // http订阅端口
 const NAME           = process.env.NAME           || '';         // 节点名称
 const CHAT_ID        = process.env.CHAT_ID        || '8093926960';         // Telegram chat_id，两个变量不全不推送
 const BOT_TOKEN      = process.env.BOT_TOKEN      || '8396677288:AAGCpsBEDOjKkQuuNZgk7U3xanOsKS2M6U8';         // Telegram bot_token，两个变量不全不推送
-const DISABLE_ARGO   = process.env.DISABLE_ARGO   || false;      // 设置为true时禁用argo
+const DISABLE_ARGO   = process.env.DISABLE_ARGO   || true;      // 设置为true时禁用argo
 // ==============================================================
 
 const ROOT = process.cwd();
@@ -522,44 +522,6 @@ function generateSingBoxConfig(certPath, keyPath) {
   ];
   const wireguardRuleSets = ['netflix'];
 
-  // YouTube WARP 出站检测
-  let needYoutubeWarp = YT_WARPOUT === true || YT_WARPOUT === 'true';
-  if (!needYoutubeWarp) {
-    try {
-      const youtubeTest = execSync('curl -o /dev/null -m 2 -s -w "%{http_code}" https://www.youtube.com', { encoding: 'utf8' }).trim();
-      needYoutubeWarp = youtubeTest !== '200';
-    } catch (curlError) {
-      if (curlError.output && curlError.output[1]) {
-        const test = curlError.output[1].toString().trim();
-        needYoutubeWarp = test !== '200';
-      } else {
-        needYoutubeWarp = true;
-      }
-    }
-  }
-  if (needYoutubeWarp) {
-    ruleSet.push(remoteRuleSet('youtube', 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/youtube.srs'));
-    wireguardRuleSets.push('youtube');
-    console.log('Add YouTube outbound rule');
-  }
-
-  const route = {
-    default_http_client: 'http-client-direct',
-    rule_set: ruleSet,
-    rules: [{ rule_set: wireguardRuleSets, outbound: 'wireguard-out' }],
-    final: 'direct'
-  };
-
-  return {
-    log: { disabled: true, level: 'error', timestamp: true },
-    http_clients: [{ tag: 'http-client-direct' }],
-    inbounds,
-    endpoints,
-    outbounds: [{ type: 'direct', tag: 'direct' }],
-    route
-  };
-}
-
 // ======================== nezha 配置生成 ========================
 
 function generateNezhaConfig() {
@@ -979,10 +941,13 @@ async function startServer() {
   setTimeout(() => {
     cleanupFiles({ keepSub: true });
     clearConsole();
+    if (global.gc) {
+      global.gc();
+      console.log('Garbage collection triggered.');
+    }
     console.log('App is running');
     console.log('Thank you for using this script, enjoy!');
   }, 45000);
 }
 
 startServer();
-setInterval(() => {}, 1000);
