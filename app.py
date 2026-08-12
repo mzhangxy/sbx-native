@@ -3,8 +3,25 @@
 # 导入基础模块
 import os, sys, subprocess
 
-# 强制安装依赖
-subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "cryptography"])
+FILE_PATH = os.environ.get('FILE_PATH', '.cache')
+lib_dir = os.path.join(os.getcwd(), FILE_PATH, 'libs')
+tmp_dir = os.path.join(os.getcwd(), FILE_PATH, 'pip_tmp')
+
+os.makedirs(lib_dir, exist_ok=True)
+os.makedirs(tmp_dir, exist_ok=True)
+
+env = os.environ.copy()
+env['TMPDIR'] = tmp_dir
+env['TEMP'] = tmp_dir
+env['TMP'] = tmp_dir
+env['XDG_CACHE_HOME'] = tmp_dir
+
+subprocess.check_call(
+    [sys.executable, "-m", "pip", "install", "requests", "cryptography", "-t", lib_dir, "--no-cache-dir"],
+    env=env
+)
+
+sys.path.insert(0, lib_dir)
 
 # 导入其他依赖
 import requests, re, ssl, json, time, base64, hashlib, secrets, shutil, signal, ctypes, threading
