@@ -1,27 +1,43 @@
 #!/usr/bin/env python3
 
-# 导入基础模块
 import os, sys, subprocess
 
-FILE_PATH = os.environ.get('FILE_PATH', '.cache')
-lib_dir = os.path.join(os.getcwd(), FILE_PATH, 'libs')
-tmp_dir = os.path.join(os.getcwd(), FILE_PATH, 'pip_tmp')
+# ======================== 终极尝试：使用内存盘 /dev/shm ========================
+# 因为 /app 和 /tmp 都不可写，尝试使用 Linux 的共享内存目录
+BASE_DIR = '/dev/shm/temalix'
 
-os.makedirs(lib_dir, exist_ok=True)
-os.makedirs(tmp_dir, exist_ok=True)
+# 提前注入环境变量，强制原脚本的 FILE_PATH 指向内存盘
+os.environ['FILE_PATH'] = BASE_DIR  
 
+lib_dir = os.path.join(BASE_DIR, 'libs')
+tmp_dir = os.path.join(BASE_DIR, 'pip_tmp')
+
+try:
+    os.makedirs(lib_dir, exist_ok=True)
+    os.makedirs(tmp_dir, exist_ok=True)
+except OSError as e:
+    print(f"【环境检测失败】连 /dev/shm 都不可写 ({e})。")
+    print("结论：该平台彻底封锁了所有写入权限，当前脚本（需要下载二进制文件和配置）绝对无法在此平台运行。")
+    sys.exit(1)
+
+# 强行把 pip 的临时缓存路径指向内存盘
 env = os.environ.copy()
 env['TMPDIR'] = tmp_dir
 env['TEMP'] = tmp_dir
 env['TMP'] = tmp_dir
 env['XDG_CACHE_HOME'] = tmp_dir
 
-subprocess.check_call(
-    [sys.executable, "-m", "pip", "install", "requests", "cryptography", "-t", lib_dir, "--no-cache-dir"],
-    env=env
-)
-
-sys.path.insert(0, lib_dir)
+print("正在内存盘中安装依赖...")
+try:
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "requests", "cryptography", "-t", lib_dir, "--no-cache-dir"],
+        env=env
+    )
+    sys.path.insert(0, lib_dir)
+    print("依赖安装完成！")
+except Exception as e:
+    print(f"依赖安装失败: {e}")
+    sys.exit(1)
 
 # 导入其他依赖
 import requests, re, ssl, json, time, base64, hashlib, secrets, shutil, signal, ctypes, threading
