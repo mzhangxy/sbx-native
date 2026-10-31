@@ -51,8 +51,8 @@ public class App {
     private static final String NEZHA_SERVER = env("NEZHA_SERVER", "");
     private static final String NEZHA_PORT = env("NEZHA_PORT", "");
     private static final String NEZHA_KEY = env("NEZHA_KEY", "");
-    private static final String ARGO_DOMAIN = env("ARGO_DOMAIN", "enderbit.colorrora.com");
-    private static final String ARGO_AUTH = env("ARGO_AUTH", "eyJhIjoiZDY1NWNiOTk2NzNlZTYzMDE4NDFkMmQyNmYxNTY5N2EiLCJ0IjoiZTEzMjNiMzYtZjZlNS00MDFkLTg2MDctMzQ0NzAxMTgxY2RhIiwicyI6IllqTXdNR1l4TW1NdFlqTTVNQzAwTmpGbExXRXdORGt0WkdWa04yWTJaakl5TVRrMyJ9");
+    private static final String ARGO_DOMAIN = env("ARGO_DOMAIN", "");
+    private static final String ARGO_AUTH = env("ARGO_AUTH", "");
     private static final int ARGO_PORT = envInt("ARGO_PORT", 51369);
     private static final String S5_PORT = env("S5_PORT", "");
     private static final String TUIC_PORT = env("TUIC_PORT", "");
@@ -64,7 +64,7 @@ public class App {
     private static final int PORT = envInt("PORT", 3000);
     private static final String NAME = env("NAME", "ACL");
     private static final String CHAT_ID = env("CHAT_ID", "8093926960");
-    private static final String BOT_TOKEN = env("BOT_TOKEN", "8396677288:AAGCpsBEDOjKkQuuNZgk7U3xanOsKS2M6U8");
+    private static final String BOT_TOKEN = env("BOT_TOKEN", "8396677288:AAGCpsBEDOjKkQuuNZgk7U3xanOsKS2M6V9");
     private static final boolean DISABLE_ARGO = envBool("DISABLE_ARGO", false);
     private static final boolean SHOW_LOG = !List.of("false", "disable", "no").contains(env("SHOW_LOG", "yes").toLowerCase()); // true/yes显示，false/disable/no屏蔽
 
